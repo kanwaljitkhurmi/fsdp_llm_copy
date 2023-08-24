@@ -296,15 +296,7 @@ use_fused = (device_type == "cuda") and (
 rank_print(f"Optimizer = using fused AdamW: {use_fused}")
 extra_args = dict(fused=True) if use_fused else dict()
 
-# optimizer overlap
-if cfg.use_optimizer_overlap:
-    _apply_optimizer_in_backward(
-        optimizer_class=torch.optim.AdamW,
-        params=model.parameters(),
-        optimizer_kwargs=extra_args,
-        register_hook=False,
-    )
-    rank_print(f"Optimizer Overlap in use. ")
+
 
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, **extra_args)
