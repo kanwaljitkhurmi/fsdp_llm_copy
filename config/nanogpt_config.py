@@ -28,7 +28,7 @@ class train_config(base_config):
     data_dir = "data"
 
     # profiling
-    run_profiler: bool = False
+    run_profiler: bool = True
     profile_folder: str = "profile_traces"
 
     # training
