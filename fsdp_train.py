@@ -139,8 +139,7 @@ seed_offset = _rank  # each process gets a different seed
 
 # wrapper to avoid cluttering with if rank==0...
 def rank_print(x):
-    if _rank == 0:
-        print(x)
+    print(x)
 
 
 _gpu_mem_tracker = Memory_Maximizer(rank=_rank)
@@ -226,7 +225,9 @@ if _2D:
     rank_print(f"{tp_device_mesh=}")
     rank_print(f"tp_size = {tp_device_mesh.size(0)}")
 
+rank_print("Before Model Initialization")
 model, model_config = fsdp_config.build_model(cfg, tp_device_mesh, rank=_rank)
+rank_print("Model Initialization done")
 
 # we need this or else calcing mfu in fsdp = sharded model size...
 _mfu_model_params = model.get_num_params()
