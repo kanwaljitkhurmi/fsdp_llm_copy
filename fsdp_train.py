@@ -526,6 +526,7 @@ rank_print(f"\nModel Size:  {_current_model_params:.2f}M")
 rank_print(f"Run completed with {gpu_count} gpus, of type {gpu_type}")
 rank_print(f"Run with Flash22?  {cfg.use_flash22=}")
 rank_print(f"Running MFU final = {running_mfu*100:.2f}%")
+rank_print(f"Batch Size = {cfg.batch_size}")
 iter_avg = round(iter_time_accumulator / iter_count, 4)
 rank_print(
     f"Avg iter speed (in seconds): {iter_avg}, with {iter_count} iterations averaged.\n"

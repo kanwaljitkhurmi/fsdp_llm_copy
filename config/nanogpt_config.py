@@ -41,7 +41,7 @@ class train_config(base_config):
     iters_to_run: int = 8  # << --- Set to None to run epochs
     num_epochs: int = 2
 
-    batch_size = 20
+    batch_size = 12
     block_size = 1024  # 256  # 1024 = gpt2, openwebtext, context of up to 256 previous characters
     use_bias: bool = False  # use bias in linear layers (recommend No)
     vocab_size: int = 50304  # use 65 for shakespeare, GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
