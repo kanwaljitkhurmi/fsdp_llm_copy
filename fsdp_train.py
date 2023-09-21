@@ -261,7 +261,7 @@ if cfg.model_sharding_strategy in [
 ]:
     print(f"to impl - no effect now")
 
-
+# model = model.to(torch.float16)
 model = FSDP(
     model,
     sharding_strategy=cfg.model_sharding_strategy,
@@ -296,8 +296,6 @@ use_fused = (device_type == "cuda") and (
 
 rank_print(f"Optimizer = using fused AdamW: {use_fused}")
 extra_args = dict(fused=True) if use_fused else dict()
-
-
 
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, **extra_args)

@@ -70,7 +70,7 @@ def _attn_fwd_inner(
         acc = acc * alpha[:, None]
         # update acc
         v = tl.load(V_block_ptr)
-        acc += tl.dot(p, v)
+        acc += tl.dot(p.to(tl.float16), v)
         # update m_i and l_i
         m_i = m_ij
         V_block_ptr = tl.advance(V_block_ptr, (BLOCK_N, 0))
@@ -613,6 +613,7 @@ class _attention(torch.autograd.Function):
     @staticmethod
     def backward(ctx, do):
         q, k, v, o, M = ctx.saved_tensors
+        do = do.contiguous()
         assert do.is_contiguous()
         assert q.stride() == k.stride() == v.stride() == o.stride() == do.stride()
         dq = torch.empty_like(q)

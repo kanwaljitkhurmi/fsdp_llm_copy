@@ -20,11 +20,11 @@ def get_mixed_precision_policy():
 
     if bf16_ready:
         bfSixteen = MixedPrecision(
-            param_dtype=torch.float16,
+            param_dtype=torch.bfloat16,
             # Gradient communication precision.
-            reduce_dtype=torch.float16,
+            reduce_dtype=torch.bfloat16,
             # Buffer precision.
-            buffer_dtype=torch.float16,
+            buffer_dtype=torch.bfloat16,
         )
         return bfSixteen
     else:

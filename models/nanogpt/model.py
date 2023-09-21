@@ -130,7 +130,7 @@ class CausalSelfAttention(nn.Module):
 
         # pre-calc channel head size
         channel_head_size = C // self.n_head
-        print(f"{channel_head_size=}")
+        # print(f"{channel_head_size=}")
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         # qkv = self.c_attn(x).split(self.n_embd // self.tp_size, dim=2)
 
@@ -157,9 +157,11 @@ class CausalSelfAttention(nn.Module):
 
         if not self.scale:
             self.scale = math.sqrt(k.size(-1))  # ** 0.5
-            print(f"{self.scale=}")
-            print(f"{k.shape=}")
-
+            # print(f"{self.scale=}")
+            # print(f"{k.shape=}")
+        q = q.to(torch.float16).contiguous()
+        k = k.to(torch.float16).contiguous()
+        v = v.to(torch.float16).contiguous()
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.use_flash22:
             y = flash22_attention(q, k, v, True, self.scale)
@@ -177,10 +179,14 @@ class CausalSelfAttention(nn.Module):
             y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
 
         # re-assemble all head outputs side by side, accounting for tp sharding
+        y = y.to(torch.bfloat16)
+
         y = y.transpose(1, 2).contiguous().view(B, T, C // self.tp_size)
 
         # output projection
+
         y = self.resid_dropout(self.c_proj(y))
+
         return y
 
 
