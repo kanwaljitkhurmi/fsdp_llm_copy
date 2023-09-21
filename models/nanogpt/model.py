@@ -27,6 +27,8 @@ from torch.distributed._tensor import (
     Shard,
 )
 
+from triton_flash22 import attention as flash22_attention
+
 
 @dataclass
 class GPTConfig:
@@ -37,6 +39,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = False  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    use_flash22: bool = False  # use Triton flash or not
 
 
 # @torch.jit.script # good to enable when not using torch.compile, disable when using (our default)
@@ -98,6 +101,9 @@ class CausalSelfAttention(nn.Module):
         self.tp_num_heads = self.n_head // self.tp_size
 
         self.dropout = config.dropout
+        self.use_flash22 = config.use_flash22
+        self.scale = None
+
         # flash attention make GPU go brrrrr but support is only in PyTorch nightly and still a bit scary
         self.flash = (
             hasattr(torch.nn.functional, "scaled_dot_product_attention")
@@ -124,17 +130,40 @@ class CausalSelfAttention(nn.Module):
 
         # pre-calc channel head size
         channel_head_size = C // self.n_head
+        print(f"{channel_head_size=}")
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        # qkv = self.c_attn(x).split(self.n_embd // self.tp_size, dim=2)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        qkv = self.c_attn(x).split(self.n_embd // self.tp_size, dim=2)
-        for item in qkv:
+        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(
+            1, 2
+        )  # (B, nh, T, hs)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(
+            1, 2
+        )  # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(
+            1, 2
+        )  # (B, nh, T, hs)
+
+        """for item in qkv:
             item = item.view(B, T, self.tp_num_heads, channel_head_size).transpose(
                 1, 2
             )  # ==>  (B, nh, T, hs)
+        
         q, k, v = qkv
+        """
+        # print(f"{q.shape=}, {k.shape=}, {v.shape=}")
+
+        if not self.scale:
+            self.scale = math.sqrt(k.size(-1))  # ** 0.5
+            print(f"{self.scale=}")
+            print(f"{k.shape=}")
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
+        if self.use_flash22:
+            y = flash22_attention(q, k, v, True, self.scale)
+        elif self.flash:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v, attn_mask=None, dropout_p=self.dropout, is_causal=True

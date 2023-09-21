@@ -21,15 +21,18 @@ import torch.distributed as dist
 @dataclass
 class train_config(base_config):
     # current models = "10.5M", "124M", "201M", "1B", "1.5B"
-    model_name: str = "20B"
+    model_name: str = "124M"
     use_tensor_parallel: bool = False
 
     dataset = "openwebtext"  # options = shakespeare_char, openwebtext
     data_dir = "data"
 
     # profiling
-    run_profiler: bool = True
+    run_profiler: bool = False
     profile_folder: str = "profile_traces"
+
+    # flash attention options
+    use_flash22: bool = True
 
     # training
     iters_to_run: int = 8  # << --- Set to None to run epochs
@@ -42,7 +45,7 @@ class train_config(base_config):
     dropout: float = 0.0
 
     # FSDP specific
-    use_mixed_precision: bool = True
+    use_mixed_precision: bool = False
     wrapping_policy = ModuleWrapPolicy({CausalSelfAttention, MLP})
     model_sharding_strategy = ShardingStrategy.FULL_SHARD
     use_fsdp_activation_checkpointing: bool = True
@@ -121,6 +124,7 @@ def build_model(cfg, tp_mesh=None, rank=None):
         bias=cfg.use_bias,
         vocab_size=cfg.vocab_size,
         dropout=cfg.dropout,
+        use_flash22=cfg.use_flash22,  # pass Triton option in
     )
 
     gpt_conf = GPTConfig(**model_args)
