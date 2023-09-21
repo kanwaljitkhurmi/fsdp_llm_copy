@@ -524,6 +524,7 @@ if _rank == 0:
     _gpu_mem_tracker.stop()
 rank_print(f"\nModel Size:  {_current_model_params:.2f}M")
 rank_print(f"Run completed with {gpu_count} gpus, of type {gpu_type}")
+rank_print(f"Run with Flash22?  {cfg.use_flash22=}")
 rank_print(f"Running MFU final = {running_mfu*100:.2f}%")
 iter_avg = round(iter_time_accumulator / iter_count, 4)
 rank_print(
