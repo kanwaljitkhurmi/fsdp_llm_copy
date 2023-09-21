@@ -139,8 +139,12 @@ seed_offset = _rank  # each process gets a different seed
 
 # wrapper to avoid cluttering with if rank==0...
 def rank_print(x):
-    print(x)
+    if _rank == 0:
+        print(x)
 
+
+# ==== visual version =======
+rank_print(f"\n ++++++  Version: {cfg.version}  +++++++ \n")
 
 _gpu_mem_tracker = Memory_Maximizer(rank=_rank)
 
