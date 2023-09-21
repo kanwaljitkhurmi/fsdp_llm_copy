@@ -28,7 +28,7 @@ class train_config(base_config):
     data_dir = "data"
 
     # version:
-    version = "9-21-2023...1_51 PM"
+    version = "9-21-2023...2_37 PM"
 
     # profiling
     run_profiler: bool = False
@@ -112,8 +112,8 @@ def build_model(cfg, tp_mesh=None, rank=None):
         n_embd: int = 5120
 
     elif model_name == "20B":
-        n_layer: int = 44
-        n_head: int = 64
+        n_layer: int = 60
+        n_head: int = 48
         n_embd: int = 6144
 
     else:
