@@ -1,4 +1,5 @@
 """
+# update do to be contiguous
 Fused Attention
 ===============
 
@@ -48,7 +49,7 @@ def _attn_fwd_inner(
         start_n = tl.multiple_of(start_n, BLOCK_N)
         # -- compute qk ----
         k = tl.load(K_block_ptr)
-        qk = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.bfloat16)
+        qk = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)
         qk += tl.dot(q, k)
         if STAGE == 2:
             mask = offs_m[:, None] >= (start_n + offs_n[None, :])
@@ -67,7 +68,7 @@ def _attn_fwd_inner(
         acc = acc * alpha[:, None]
         # update acc
         v = tl.load(V_block_ptr)
-        acc += tl.dot(p.to(tl.bfloat16), v)
+        acc += tl.dot(p.to(tl.float16), v)
         # update m_i and l_i
         m_i = m_ij
         V_block_ptr = tl.advance(V_block_ptr, (BLOCK_N, 0))
@@ -276,23 +277,22 @@ def _attn_bwd_dkdv(
             mask = offs_m[None, :] >= offs_n[:, None]
             pT = tl.where(mask, pT, 0.0)
         do = tl.load(do_ptrs)
-        do = do.to(tl.bfloat16)
         # Compute dV.
         ppT = pT
-        ppT = ppT.to(tl.bfloat16)
-        dv += tl.dot(ppT, do).to(tl.bfloat16)
+        ppT = ppT.to(tl.float16)
+        dv += tl.dot(ppT, do)
         # D (= delta) is pre-divided by ds_scale.
         Di = tl.load(D + offs_m)
         # Compute dP and dS.
-        dpT = tl.dot(v, tl.trans(do)).to(tl.bfloat16)
+        dpT = tl.dot(v, tl.trans(do)).to(tl.float32)
         dsT = pT * (dpT - Di[None, :])
-        dsT = dsT.to(tl.bfloat16)
-        dk += tl.dot(dsT, tl.trans(qT)).to(tl.bfloat16)
+        dsT = dsT.to(tl.float16)
+        dk += tl.dot(dsT, tl.trans(qT))
         # Increment pointers.
         curr_m += step_m
         qT_ptrs += step_m * stride_tok
         do_ptrs += step_m * stride_tok
-    return dk.to(tl.bfloat16), dv.to(tl.bfloat16)
+    return dk, dv
 
 
 # the main inner-loop logic for computing dQ
@@ -341,12 +341,12 @@ def _attn_bwd_dq(
             mask = offs_m[:, None] >= offs_n[None, :]
             p = tl.where(mask, p, 0.0)
         # Compute dP and dS.
-        dp = tl.dot(do, vT).to(tl.bfloat16)
+        dp = tl.dot(do, vT).to(tl.float32)
         ds = p * (dp - Di[:, None])
-        ds = ds.to(tl.bfloat16)
+        ds = ds.to(tl.float16)
         # Compute dQ.
         # NOTE: We need to de-scale dq in the end, because kT was pre-scaled.
-        dq += tl.dot(ds, tl.trans(kT)).to(tl.bfloat16)
+        dq += tl.dot(ds, tl.trans(kT))
         # Increment pointers.
         curr_n += step_n
         kT_ptrs += step_n * stride_tok
@@ -410,8 +410,8 @@ def _attn_bwd(
         MASK_BLOCK_M1: tl.constexpr = BLOCK_M1 // BLK_SLICE_FACTOR
         offs_n = start_n + tl.arange(0, BLOCK_N1)
 
-        dv = tl.zeros([BLOCK_N1, BLOCK_DMODEL], dtype=tl.bfloat16)
-        dk = tl.zeros([BLOCK_N1, BLOCK_DMODEL], dtype=tl.bfloat16)
+        dv = tl.zeros([BLOCK_N1, BLOCK_DMODEL], dtype=tl.float32)
+        dk = tl.zeros([BLOCK_N1, BLOCK_DMODEL], dtype=tl.float32)
 
         # load K and V: they stay in SRAM throughout the inner loop.
         k = tl.load(K + offs_n[:, None] * stride_tok + offs_k[None, :] * stride_d)
@@ -486,7 +486,7 @@ def _attn_bwd(
         offs_m = start_m + tl.arange(0, BLOCK_M2)
 
         q = tl.load(Q + offs_m[:, None] * stride_tok + offs_k[None, :] * stride_d)
-        dq = tl.zeros([BLOCK_M2, BLOCK_DMODEL], dtype=tl.bfloat16)
+        dq = tl.zeros([BLOCK_M2, BLOCK_DMODEL], dtype=tl.float32)
         do = tl.load(DO + offs_m[:, None] * stride_tok + offs_k[None, :] * stride_d)
 
         m = tl.load(M + offs_m)
@@ -610,6 +610,7 @@ class _attention(torch.autograd.Function):
     @staticmethod
     def backward(ctx, do):
         q, k, v, o, M = ctx.saved_tensors
+        do = do.contiguous()
         assert do.is_contiguous()
         assert q.stride() == k.stride() == v.stride() == o.stride() == do.stride()
         dq = torch.empty_like(q)

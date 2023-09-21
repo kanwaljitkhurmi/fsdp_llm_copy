@@ -28,14 +28,14 @@ class train_config(base_config):
     data_dir = "data"
 
     # version:
-    version = "9-21-2023...2_37 PM"
+    version = "9-21-2023...2_50 PM"
 
     # profiling
     run_profiler: bool = False
     profile_folder: str = "profile_traces"
 
     # flash attention options
-    use_flash22: bool = False
+    use_flash22: bool = True
 
     # training
     iters_to_run: int = 8  # << --- Set to None to run epochs
