@@ -28,7 +28,7 @@ class train_config(base_config):
     data_dir = "data"
 
     # version:
-    version = "9-21-2023...6_47 PM"
+    version = "9-21-2023...6_58 PM"
 
     # profiling
     run_profiler: bool = False
@@ -36,7 +36,7 @@ class train_config(base_config):
 
     # flash attention options
     use_flash22_bf16: bool = False
-    use_flash22_fp16: bool = False
+    use_flash22_fp16: bool = True
 
     # training
     iters_to_run: int = 8  # << --- Set to None to run epochs
@@ -131,6 +131,10 @@ def build_model(cfg, tp_mesh=None, rank=None):
         use_flash22_fp16=cfg.use_flash22_fp16,  # pass Triton option in
         use_flash22_bf16=cfg.use_flash22_bf16,
     )
+
+    assert not (
+        cfg.use_flash22_fp16 and cfg.use_flash22_bf16
+    ), f"both fp16 and bf16 set to True...please use only one at a time."
 
     gpt_conf = GPTConfig(**model_args)
     model = GPT(tp_mesh, gpt_conf, rank=rank)
