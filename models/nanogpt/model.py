@@ -27,7 +27,8 @@ from torch.distributed._tensor import (
     Shard,
 )
 
-from triton_flash22_bfloat16 import attention as flash22_attention
+from triton_flash22_bfloat16 import attention as flash22_bf16_attention
+from triton_flash22_fp16 import attention as flash22_fp16_attention
 
 
 @dataclass
@@ -39,7 +40,8 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = False  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-    use_flash22: bool = False  # use Triton flash or not
+    use_flash22_bf16: bool = False  # use Triton flash or not
+    use_flash22_fp16: bool = False
 
 
 # @torch.jit.script # good to enable when not using torch.compile, disable when using (our default)
@@ -101,7 +103,8 @@ class CausalSelfAttention(nn.Module):
         self.tp_num_heads = self.n_head // self.tp_size
 
         self.dropout = config.dropout
-        self.use_flash22 = config.use_flash22
+        self.use_flash22_bf16 = config.use_flash22_bf16
+        self.use_flash22_fp16 = config.use_flash22_fp16
         self.scale = None
 
         # flash attention make GPU go brrrrr but support is only in PyTorch nightly and still a bit scary
@@ -159,13 +162,16 @@ class CausalSelfAttention(nn.Module):
             self.scale = math.sqrt(k.size(-1))  # ** 0.5
             # print(f"{self.scale=}")
             # print(f"{k.shape=}")
-        # q = q.to(torch.float16).contiguous()
-        # k = k.to(torch.float16).contiguous()
-        # v = v.to(torch.float16).contiguous()
+        if self.use_flash22_fp16:
+            q = q.to(torch.float16).contiguous()
+            k = k.to(torch.float16).contiguous()
+            v = v.to(torch.float16).contiguous()
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.use_flash22:
-            y = flash22_attention(q, k, v, True, self.scale)
+        if self.use_flash22_bf16:
+            y = flash22_bf16_attention(q, k, v, True, self.scale)
+        elif self.use_flash22_fp16:
+            y = flash22_fp16_attention(q, k, v, True, self.scale)
         elif self.flash:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(
@@ -180,7 +186,8 @@ class CausalSelfAttention(nn.Module):
             y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
 
         # re-assemble all head outputs side by side, accounting for tp sharding
-        # y = y.to(torch.bfloat16)
+        if self.use_flash22_fp16:
+            y = y.to(torch.bfloat16)
 
         y = y.transpose(1, 2).contiguous().view(B, T, C // self.tp_size)
 

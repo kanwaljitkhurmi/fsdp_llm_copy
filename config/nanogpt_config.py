@@ -28,14 +28,15 @@ class train_config(base_config):
     data_dir = "data"
 
     # version:
-    version = "9-21-2023...4_58 PM"
+    version = "9-21-2023...6_47 PM"
 
     # profiling
     run_profiler: bool = False
     profile_folder: str = "profile_traces"
 
     # flash attention options
-    use_flash22: bool = True
+    use_flash22_bf16: bool = False
+    use_flash22_fp16: bool = False
 
     # training
     iters_to_run: int = 8  # << --- Set to None to run epochs
@@ -127,7 +128,8 @@ def build_model(cfg, tp_mesh=None, rank=None):
         bias=cfg.use_bias,
         vocab_size=cfg.vocab_size,
         dropout=cfg.dropout,
-        use_flash22=cfg.use_flash22,  # pass Triton option in
+        use_flash22_fp16=cfg.use_flash22_fp16,  # pass Triton option in
+        use_flash22_bf16=cfg.use_flash22_bf16,
     )
 
     gpt_conf = GPTConfig(**model_args)
